@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <script src="https://kit.fontawesome.com/2293856de2.js"></script>
+    <title>画像重ねIIIFビューワ</title>
+    <link rel="stylesheet" href="jquery-ui-1.12.1/jquery-ui.min.css">
+    <style>
+     .pgNmTit{background-color:white;color:#007fff;border-radius:3px}
+     .pNum{color:white;cursor:pointer}
+     .pNum:hover{color:red}
+     .pNavBar{background-color:#007fff;color:white;text-align:right;border-radius:3px}
+     .menu{color:blueviolet}
+     .eThumb{border-style: solid; border-color:#007fff;border-radius:5px;padding:10px}
+     .inLineBlock{ display: inline-block; padding:10px }
+     .fa-window-minimize{color: #eeee00;cursor:pointer}
+     .fa-window-close{color: #dd0000;cursor:pointer}
+     .fa-window-restore{color: #eeee00;cursor:pointer;display:none}
+     .header{color:#007fff;font-size:16px}
+     #outputJson{display:none}
+     #copyJson, #closeJson, #readJson, #setPositions{display:none}
+    </style>
+    <script src="jquery-3.4.1.min.js"></script>
+    <script src="jquery-ui-1.12.1/jquery-ui.min.js"></script> 
+    <script src="openseadragon-bin-2.4.1/openseadragon.min.js"></script>  
+  </head>
+  <body>
+<table><tr>
+<td style="vertical-align:top" class="pNavBar">
+    <div style="overflow-y:auto;padding:3px" id="pNavBarBody"><span class="pgNmTit">頁</span><span id="pageNum"></span></div>
+</td>
+
+<td style="vertical-align:top">
+<div style="font-weight:bold" class="header">IIIF Viewer for Overlaying Canvases</div>
+    <span class="menu">ManifestURI:</span> <input type="text" size="40" id="linkManiURI" value="">&nbsp;<button id="maniLoad" class="ui-button ui-widget ui-corner-all">Load</button><br/>
+    <div><span class="menu">タイトル:</span> <span id="linkLabel"></span></div>
+    <div><span class="menu">帰属:</span> <span id="linkAttr"></span> <span class="menu">利用条件:</span> <span id="linkLicense"></span></div>
+    <!--Image URI: <div id="linkImage"></div>-->
+    <!--https://gallica.bnf.fr/iiif/ark:/12148/btv1b10526547d/manifest.json-->
+
+    <div id="linkCanvasURI" style="display:none"></div>
+    <button id="pickup" class="ui-button ui-widget ui-corner-all">Pickup</button>&nbsp;&nbsp; <button id="adjSize" class="ui-button ui-widget ui-corner-all">Adjust Size</button>
+    <div id="myViewer" class="openseadragon" style="width:800px;height:600px"></div>
+
+</td><td style="vertical-align:top">
+    <div id="thumbList" style="width:350px;overflow-x:visible;overflow-y:auto"></div> 
+</td></tr>
+</table>
+<div><button id="makeJson" class="ui-button ui-widget ui-corner-all">Make Json</button>
+<button id="openJson" class="ui-button ui-widget ui-corner-all">Open Json Window</button>
+<button id="closeJson" class="ui-button ui-widget ui-corner-all">Close Json Window</button>  
+<button id="copyJson" class="ui-button ui-widget ui-corner-all">Copy Json</button>
+<button id="readJson" class="ui-button ui-widget ui-corner-all">Load Json</button>
+<button id="setPositions" class="ui-button ui-widget ui-corner-all">Set Positions</button></div>
+<div><textarea id="outputJson" style="width:1000px;height:500px"></textarea></div>
+<script>
+ $(function(){
+  resizeViewer();
+  $(window).resize(function(){
+   resizeViewer(); 
+  });
+  $("#adjSize").click(function(){
+    var currentPage = viewer.currentPage();
+    var currentiJsonUri = viewer.tileSources[currentPage].replace(/\/info.json$/,'');
+    var compImgA = currentiJsonUri+'/full/1024,/0/default.jpg';
+    var compImgB = '';
+    $(".putCanv").each(function(){
+      if($(this).prop('checked') == true){
+        compImgB = $(this).parents(".eThumb").find("img").attr("src");
+        compImgB = compImgB.replace(/full.+\.jpg$/, '')+'/full/1024,/0/default.jpg';
+      }
+    });   
+    var cmpUrl = 'https://www.dhii.jp/nagasaki/compUrl.txt';
+    console.log(compImgA);
+    console.log(compImgB);
+    $.ajax({
+       url:cmpUrl,
+       dataType:'json'}).done(function(rJson){
+         var ratio = rJson["ratio"];
+         viewer.world.getItemAt(1).setWidth(ratio);
+    }); 
+  });
+    $("html").on("dragenter", function(e){
+        e.stopPropagation();
+        e.preventDefault();
+    });
+    $("html").on("dragover", function(e){
+        e.stopPropagation();
+        e.preventDefault();
+    });
+    $("html").on("drop", function(e) {
+       var _e = e;
+       if( _e.originalEvent ){
+           e = _e.originalEvent;
+       }
+      console.log(e.toElement.nodeName);
+      if(e.toElement.nodeName == 'CANVAS'){
+      _e.preventDefault();
+      _e.stopPropagation();
+      var orgUrl = e.dataTransfer.getData('URL');
+      var canvUrl = '';
+      var maniUrl = orgUrl;
+      if(orgUrl.match(/\?manifest=/)){
+         maniUrl = orgUrl.replace(/^.+\?manifest=/, '');
+      }
+      if(maniUrl.match(/&canvasID=/)){
+         canvUrl = maniUrl.replace(/^.+&canvasID=/, '');
+         maniUrl = maniUrl.replace(/&canvasID=.+$/, '');
+      }
+      console.log(maniUrl);
+      console.log(canvUrl);
+     loadManifest(maniUrl);
+      }
+      else{
+      _e.preventDefault();
+      _e.stopPropagation();
+      console.log('no');
+      }
+    });
+
+  var canvasMani = {}
+  window.imageMani = {}
+  window.imageManis = {}
+  $("body").on("click", ".pNum", function(){
+      var pNum = parseInt($(this).attr("data-n"));
+      viewer.goToPage(pNum);
+  });
+  $("#addViewer").click(function(){
+      $(".eThumb").each(function(){
+        var imgUri = $(this).find("img").attr("src");
+        imgUri = imgUri.replace(/full.+\.jpg$/, '')+'info.json'; 
+        console.log(imgUri);
+        viewer.addTiledImage({
+          tileSource: imgUri,
+          opacity: 0.5,
+          x:0,
+          y:0
+        });
+  });      
+/*
+      viewer.world.getItemAt(1).setOpacity(0.8);
+      viewer.world.getItemAt(1).setWidth(1.5);
+      viewer.world.getItemAt(1).setPosition({x:0,y:0.5});
+*/
+  });
+  $("#closeJson").click(function(){
+   $("#outputJson").hide();
+   $("#closeJson").hide();
+   $("#copyJson").hide();
+   $("#openJson").show();
+   $("#setPositions").hide();
+   $("#readJson").hide();    			       
+  });
+  $("body").on("change", ".putCanv", function(){
+      if($(this).prop('checked') == true){
+        var imgUri = $(this).parents(".eThumb").find("img").attr("src");
+        imgUri = imgUri.replace(/full.+\.jpg$/, '')+'info.json'; 
+        console.log(imgUri);
+        viewer.addTiledImage({
+          tileSource: imgUri,
+          opacity: 0.7,
+          index:10,
+          x:0,
+          y:0
+        });
+       var ebxn = 1;
+       var pThis = $(this);
+       $(".putCanv").each(function(){
+        if($(this).prop('checked') == true){
+         if($(this).val() != ''){
+          if(parseInt($(this).val()) >= ebxn){
+            ebxn = parseInt($(this).val()) + 1;
+            console.log('testnum:'+ebxn);
+          }//if(parseInt($(this).val()) >= ebxn){
+         }//if($(this).val() != ''){
+        }//if($(this).prop('checked') == true){
+        else{
+         $(this).val('');
+        }  
+       });
+       $(pThis).val(ebxn);
+      }
+      else{//if($(this).prop('checked') == true){
+       console.log('delTiledImage');
+        var itemNum = parseInt($(this).val());
+        console.log(itemNum);
+        var item = viewer.world.getItemAt(itemNum);
+        viewer.world.removeItem(item);
+        $(this).val('');
+        $(".putCanv").each(function(){ 
+        if($(this).prop('checked') == true){
+         if($(this).val() != ''){
+          if (parseInt($(this).val()) > itemNum ){
+            ebxn = parseInt($(this).val()) - 1;
+            $(this).val(ebxn);
+          }
+         }
+        }
+        });//  $(".putCanv").each(function(){ 
+     }
+  });// $("body").on("click", ".putCanv", function(){
+  $("body").on("click", ".fa-window-minimize", function(){
+    $(this).closest(".eThumb").find(".eThumbBody").hide();
+    $(this).siblings(".fa-window-restore").show();
+    $(this).hide();
+  });
+  $("body").on("click", ".fa-window-restore", function(){
+    $(this).closest(".eThumb").find(".eThumbBody").show();
+    $(this).siblings(".fa-window-minimize").show();  
+    $(this).hide();
+  });  
+  $("body").on("click", ".fa-window-close", function(){
+    var itemNum = parseInt($(this).closest(".eThumb").find(".putCanv").val());
+    var item = viewer.world.getItemAt(itemNum);
+    viewer.world.removeItem(item);
+    $(this).closest(".eThumb").remove();
+  });
+ $("body").on("click", "#pickup", function(){
+     pickupCanvas(viewer, maniCont, 0);
+  });
+  var maniCont = {};
+  var newMani = {};
+  var arAllXywh = {};
+  var allJson = {};
+// $("#maniLoad, #readJson").click(function(){
+$("#maniLoad, #readJson").click(function(){
+  var mid = $(this).attr('id');
+  loadManifest(mid); 
+});
+
+function loadManifest(mid){ 
+  window.arCanvInfo = {};
+  if(mid == 'readJson'){
+     $("#setPositions").show(); 
+     var allJson = JSON.parse($("#outputJson").val());
+     var pUrl = allJson["@id"];
+     var curCanv = allJson["sequences"][0]["canvases"][0]["@id"];
+   }
+   else if(mid.match(/http/)){ 
+    var pUrl = mid;
+    $("#linkManiURI").val(mid);
+   }
+   else{
+    var pUrl = $("#linkManiURI").val();
+  }
+     $.ajax({
+	    url:pUrl,
+	    dataType:'json'}).done(function(maniJson){
+              maniCont = maniJson;
+              newMani = JSON.parse(JSON.stringify(maniJson)); 
+	      $("#linkAttr").text('').text(maniJson["attribution"]);
+              var licUrl = maniJson["license"];
+              if(licUrl.match(/^http/)){
+                 licUrl = '<a href="'+licUrl+'" target="_blank">'+licUrl+'</a>';  
+              }
+	      $("#linkLicense").text('').html(licUrl);
+	      $("#linkLabel").text('').text(maniJson["label"]); 
+	      arIJsonUri = [];
+	      var pageNumbers = '';
+	  for(var e=0;e<maniJson["sequences"].length;e++){
+            for(var ec=0; ec<maniJson["sequences"][e]["canvases"].length;ec++){
+	       var ece =  maniJson["sequences"][e]["canvases"][ec];
+	       var iJsonUri = ece["images"][0]["resource"]["service"]["@id"]+'/info.json';
+	       arIJsonUri.push(iJsonUri);
+	       var pec = ec+1;
+	       pageNumbers += '<div class="pNum" data-n="'+ec+'">'+pec+'</div>';
+               window.arCanvInfo[iJsonUri] = ece["@id"];
+	     }
+	   }	      
+	   viewer.open(arIJsonUri);
+	   $("#pageNum").html(pageNumbers);
+           var iJsonUri0 = arIJsonUri[0];
+           if(maniJson["viewingDirection"] == 'right-to-left'){
+            $("div[title='Previous page']").before($("div[title='Next page']"));
+            $("img[src='openseadragon-bin-2.4.1/images/next_grouphover.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/previous_grouphover.png');
+            $("img[src='openseadragon-bin-2.4.1/images/next_rest.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/previous_rest.png');
+            $("img[src='openseadragon-bin-2.4.1/images/next_pressed.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/previous_pressed.png');
+            $("img[src='openseadragon-bin-2.4.1/images/next_hover.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/previous_hover.png');
+            $("img[src='openseadragon-bin-2.4.1/images/previous_grouphover.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/next_grouphover.png');
+            $("img[src='openseadragon-bin-2.4.1/images/previous_rest.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/next_rest.png');
+            $("img[src='openseadragon-bin-2.4.1/images/previous_pressed.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/next_pressed.png');
+            $("img[src='openseadragon-bin-2.4.1/images/previous_hover.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/next_hover.png');
+           }//if(maniJson["viewingDirection"] == 'right-to-left'){
+           else{
+            $("div[title='Next page']").before($("div[title='Previous page']"));
+            $("img[src='openseadragon-bin-2.4.1/images/r2l/next_grouphover.png']").attr('src','openseadragon-bin-2.4.1/images/previous_grouphover.png');
+            $("img[src='openseadragon-bin-2.4.1/images/r2l/next_rest.png']").attr('src','openseadragon-bin-2.4.1/images/previous_rest.png');
+            $("img[src='openseadragon-bin-2.4.1/images/r2l/next_pressed.png']").attr('src','openseadragon-bin-2.4.1/images/previous_pressed.png');
+            $("img[src='openseadragon-bin-2.4.1/images/r2l/next_hover.png']").attr('src','openseadragon-bin-2.4.1/images/previous_hover.png');
+            $("img[src='openseadragon-bin-2.4.1/images/r2l/previous_grouphover.png']").attr('src','openseadragon-bin-2.4.1/images/next_grouphover.png');
+            $("img[src='openseadragon-bin-2.4.1/images/r2l/previous_rest.png']").attr('src','openseadragon-bin-2.4.1/images/next_rest.png');
+            $("img[src='openseadragon-bin-2.4.1/images/r2l/previous_pressed.png']").attr('src','openseadragon-bin-2.4.1/images/next_pressed.png');
+            $("img[src='openseadragon-bin-2.4.1/images/previous_hover.png']").attr('src','openseadragon-bin-2.4.1/images/r2l/next_hover.png');
+          }
+          $("#linkCanvasURI").text(window.arCanvInfo[iJsonUri0]);
+	  if(mid == 'readJson'){ //既存Json読み込みの場合
+	      var iImages = allJson["sequences"][0]["canvases"][0]["images"];
+	      console.log(iImages);		      
+	      for (i=0;i<iImages.length;i++){
+		if(i > 0){
+		  var onCanv = iImages[i]["on"];
+                  var onCanvXywh = onCanv.replace(/^.+xywh=/, '');
+  	          var onCanvImgUri = iImages[i]["resource"]["@id"];
+                  onCanvImgUri = onCanvImgUri.replace(/\/full.+\.jpg$/, '')+'/info.json'; 
+                  viewer.addTiledImage({
+                    tileSource: onCanvImgUri,
+                    opacity: 0.7,
+                    x:0,
+                    y:0
+                  });
+                  console.log(viewer.world.getItemCount());
+                  arAllXywh[i] = onCanvXywh;
+//                  console.log(viewer.world);
+		}
+		else{
+		  var onCanv = iImages[i]["on"];
+//                  var iJsonUri = iImages[0]["resource"]["service"]["@id"]+'/info.json';
+                  var canvases = maniJson["sequences"][0]["canvases"];
+                  for(ci=0;ci<canvases.length;ci++){
+                   if(canvases[ci]["@id"] == onCanv){
+                     viewer.goToPage(ci);
+                     console.log('page:'+ci);
+                   }
+                  }
+		  console.log('CanvID:'+onCanv);
+		}	      
+              }			      
+          }
+      });
+//  });
+}//function loadManifest(e){ 
+  $("#setPositions").click(function(){
+    for (key in arAllXywh){
+//   arAllXywh[i] = onCanvXywh;
+      var arOnCanvXywh = arAllXywh[key].split(/,/);
+      var ocx = arOnCanvXywh[0]; 
+      var ocy = arOnCanvXywh[1]; 
+      var ocw = arOnCanvXywh[2]; 
+      var och = arOnCanvXywh[3]; 
+      var ow = viewer.world.getItemAt(key).getContentSize().x; 
+      var oh = viewer.world.getItemAt(key).getContentSize().y; 
+      var vox = ocx / ow;
+      var voy = ocy / ow;
+      var vow = ocw / ow;
+      var voh = och / ow; 
+      viewer.world.getItemAt(key).setWidth(vow);
+      viewer.world.getItemAt(key).setPosition({x:vox,y:voy});
+      var allJson = JSON.parse($("#outputJson").val());
+      var eMani = allJson["sequences"][0]["canvases"][0]["images"][key];
+      pickupCanvas(viewer, eMani, key);
+   }
+    ///
+    console.log(viewer.world.getItemCount());
+  });
+  var zoomLevel = ($("#myViewer").height() - 100 ) / $("#myViewer").width();
+  console.log('zoom:'+zoomLevel);
+  var viewer = OpenSeadragon({
+	 id: "myViewer",
+	 prefixUrl:     "openseadragon-bin-2.4.1/images/",
+	 visibilityRatio:    1,
+	 minZoomLevel:       0.05,
+         maxZoomLevel:100,
+	 defaultZoomLevel:   zoomLevel,
+	 sequenceMode:  true,
+         initialPage: 0,
+	 tileSources:   [  ]
+  });
+  viewer.addHandler("page", function (data) {
+	  var npage = data.page;
+          canvasMani = maniCont['sequences'][0]['canvases'][npage];
+          window.imageMani = maniCont['sequences'][0]['canvases'][npage]['images'][0];
+          console.log(window.imageMani);
+          var currentDzi = viewer.tileSources[npage];
+          var currentCanvUri = window.arCanvInfo[currentDzi];
+          $(".pNum").css({'background-color':'#007fff', 'color':'white'});
+          $(".pNum[data-n='"+npage+"']").css({'background-color':'white', 'color':'red'});
+          $("#linkCanvasURI").text(currentCanvUri);
+          $(".putCanv").val('');
+  });
+  viewer.addHandler("canvas-click",function (canv) {    
+         window.xx0 = viewer.world.getItemAt(0).getBounds().x;
+         window.yy0 = viewer.world.getItemAt(0).getBounds().y;
+  });
+  $("body").on("click", ".moving", function(){
+   if($(this).prop('checked') == true){
+      $(".moving").each(function(){
+        $(this).prop('checked',false);
+        $(this).closest("label").removeClass('ui-checkboxradio-checked ui-state-active');
+ 	$(this).siblings(".ui-checkboxradio-icon").removeClass('ui-icon-check ui-state-checked');    
+ 	$(this).siblings(".ui-checkboxradio-icon").addClass('ui-icon-blank');
+      });
+      $(this).prop('checked',true);
+      viewer.setMouseNavEnabled(false);
+      console.log('mouse disabled');
+   }
+   else{
+      $(".moving").prop('checked',false);
+      viewer.setMouseNavEnabled(true);
+      console.log('mouse enabled');
+   }
+  });
+  var isDragging = false;
+  var cx = 0;
+  var cy = 0;
+  var itemNum = 0;
+  $("body").on("mousedown", "#myViewer", function(canv){
+      isDragging = true;
+      cx = canv.pageX;
+      cy = canv.pageY;
+      $(".moving:checked").each(function(){
+        itemNum = $(this).parents(".eThumb").find(".putCanv").val();
+        console.log(itemNum);
+      });
+      cxx = viewer.world.getItemAt(itemNum).getBounds().x;
+      cyy = viewer.world.getItemAt(itemNum).getBounds().y;
+  });
+  $("body").on("mouseup", "#myViewer", function(canv){
+      isDragging = false;
+  });
+  $("body").on("mousemove", "#myViewer", function(canv){
+   if(isDragging == true){
+    console.log(canv.pageY); 
+    console.log(cy);
+    console.log(cyy);
+    $(".moving:checked").each(function(){
+        itemNum = $(this).parents(".eThumb").find(".putCanv").val();
+    });
+    var z = viewer.viewport.getZoom();
+    var x = (canv.pageX - cx ) / $("#myViewer").width() / z + cxx;
+    var y = (canv.pageY - cy ) / $("#myViewer").width() / z + cyy;
+    console.log(y);
+    viewer.world.getItemAt(itemNum).setPosition({x:x ,y: y });
+   }
+  });
+  $("#openJson").click(function(){
+   $("#copyJson").show();
+   $("#outputJson").show();
+   $("#closeJson").show();
+   $("#readJson").show();			      			      
+   $("#openJson").hide();
+  });
+  $("#makeJson").click(function(){
+      $("#copyJson").show();
+      $("#outputJson").show();
+      $("#closeJson").show();
+      $("#readJson").show(); 
+      $("#openJson").hide();
+      var ic = viewer.world.getItemCount();
+      var canvasManiCopy =  {};
+      canvasManiCopy =   JSON.parse(JSON.stringify(canvasMani)); 
+console.log('maxic:'+ic);
+      for(i2=0;i2<ic;i2++){
+        console.log(viewer.world.getItemAt(i2).getBounds());
+        var pImageUri = $(".putCanv[value='"+i2+"'").closest(".eThumb").find(".eImageUri").val();
+        console.log('i2'+i2+':'+pImageUri);
+        if($(".eImageUri[value='"+pImageUri+"']").parents(".eThumb").find(".putCanv").prop('checked')){
+         console.log('ここまで'); 
+	 var iJsonUri = window.imageManis[pImageUri]["resource"]["service"]["@id"]+'/info.json';
+         var ow = viewer.world.getItemAt(i2).getContentSize().x; 
+         var oh = viewer.world.getItemAt(i2).getContentSize().y; 
+           console.log('ic:'+i2);
+           var nx  = viewer.world.getItemAt(i2).getBounds().x;
+           var ny  = viewer.world.getItemAt(i2).getBounds().y;
+           var nw  = viewer.world.getItemAt(i2).getBounds().width;
+           var nh  = viewer.world.getItemAt(i2).getBounds().height;
+           var nxx = ow * nx;
+           var nyy = ow * ny;
+           var nww = ow * nw;
+           var nhh = ow * nh;
+           var xywh = Math.round(nxx)+','+Math.round(nyy)+','+Math.round(nww)+','+Math.round(nhh);
+	   var onCanv = canvasManiCopy["@id"]+"#xywh="+xywh;
+	   window.imageManis[pImageUri]["license"] = $(".eImageUri[value='"+pImageUri+"']").closest(".eThumb").find(".eLicense").val();
+	   window.imageManis[pImageUri]["attribution"] = $(".eImageUri[value='"+pImageUri+"']").closest(".eThumb").find(".eAttr").val();
+	   window.imageManis[pImageUri]["on"] = onCanv;
+           console.log(pImageUri); 		   
+           console.log(window.imageManis[pImageUri]); 
+           canvasManiCopy["images"].push(window.imageManis[pImageUri]);
+        }
+      }
+      console.log(canvasManiCopy);
+      newMani["sequences"][0]["canvases"] = [];
+      newMani["sequences"][0]["canvases"].push(canvasManiCopy);
+      $("#outputJson").val(JSON.stringify(newMani));		   
+      console.log(viewer.world.getItemAt(1).viewportToImageRectangle(0,0,1,1));
+      console.log(viewer.world.getItemAt(1).viewportToImageCoordinates(1,1));
+      console.log(viewer.world.getItemAt(1).viewportToImageZoom());
+   });
+  $("#copyJson").click(function(){
+   if(execCopy($("#outputJson").val())){
+    alert('Copied to your clipboard!');
+   }
+   else {
+    alert('Your browser can not copy by this button!');
+   }
+  });
+ });
+
+function pickupCanvas(viewer, maniCont2, sw){
+  if(sw == 0){
+   console.log('繰り返しなし:'+maniCont2);
+   var currentPage = viewer.currentPage();
+   if(window.imageMani["resource"] == undefined){
+    window.imageMani = maniCont2['sequences'][0]['canvases'][0]['images'][0];
+    var imageId =  window.imageMani["resource"]["@id"];
+    var eTLicense = $("#linkLicense").text(); 
+    var eTAttr = $("#linkAttr").text(); 
+    var eTCvURI = $("#linkCanvasURI").text(); 
+    var eTManiURI = $("#linkManiURI").text(); 
+//ここに親から取った変数を入れる
+   }
+   else{
+    imageId =  window.imageMani["resource"]["@id"];
+   }
+   window.imageManis[imageId] = window.imageMani;
+   var currentiJsonUri = viewer.tileSources[currentPage].replace(/\/info.json$/,'');
+   var thumbImg = currentiJsonUri+'/full/128,/0/default.jpg';
+  }
+  else{
+    console.log('繰り返し');
+    console.log(maniCont2);
+//    var imageId =  window.imageMani["resource"]["@id"];
+    var imageId =  maniCont2["resource"]["@id"];
+    var thumbImg = maniCont2["resource"]["@id"].replace(/\/full\/full\/.+default\.jpg$/,''); 
+    thumbImg = thumbImg+'/full/128,/0/default.jpg';
+    var eTLicense = maniCont2["license"];
+    var eTAttr = maniCont2["attribution"];
+    var eTCvURI = '';//maniCont2[""];
+    var eTManiURI = '';//maniCont2[""];
+  } 
+//  var num = $(".putCanv").length + 1;
+  var thumb = '<div class="eThumb" style="width:300px">';
+       thumb += '<table style="width:300px"><tr><td><i class="fas fa-window-minimize"></i><i class="fas fa-window-restore"></i></td><td>&nbsp;';
+       thumb += $("#linkLabel").text()+'';	  
+       thumb += '&nbsp;</td><td style="text-align:right"><i class="fas fa-window-close"></i></td></tr></table>';
+       thumb += '<div class="eThumbBody"><table><tr>';
+       thumb += '<td>';
+       thumb += '<input type="hidden" class="eImageUri" value="'+imageId+'">';
+       thumb += '<input type="hidden" class="eLicense" value="'+eTLicense+'">';
+       thumb += '<input type="hidden" class="eAttr" value="'+eTAttr+'">';
+//       thumb += '<input type="hidden" class="eLicense" value="'+$("#linkLicense").text()+'">';
+//       thumb += '<input type="hidden" class="eLicense" value="'+$("#linkLicense").text()+'">';
+  if(sw > 0){
+     thumb += '<div class="toggles"><label><input type="checkbox" class="putCanv" value="'+sw+'" checked> 画像重ね</label>';
+  }
+  else{
+       thumb += '<div class="toggles"><label><input type="checkbox" class="putCanv" value=""> 画像重ね</label>';
+  }
+       thumb += '<br/><label><input type="checkbox" class="moving" value=""> 位置調整</label></div></td>';
+       thumb += '<td><img src="'+thumbImg+'" ';
+       thumb += 'data-mani="'+eTManiURI+'" data-canv="'+eTCvURI+'"/>';
+       thumb += '</td>';
+       thumb += '</tr></table>';
+       thumb += '<div class="pSlider">透過度：<span class="opot">0.8</span><div class="slider"></div>'+'</div>';
+       thumb += '<div class="pSlider">サイズ：<span class="wot">1.0</span><div class="sliderw"></div>'+'</div>';
+       thumb += '<div class="pSlider">回転：<span class="rot">0</span><div class="sliderr"></div>'+'</div></div></div>';
+   $("#thumbList").append(thumb);
+   $(".putCanv,.moving").checkboxradio();
+   $(".toggles").controlgroup();
+   $(".slider").slider({
+         min:0,
+         max:100,
+         value:70,
+         slide: function( event, ui ) {
+           var opa = ui.value / 100;
+           var snum = parseInt($(this).parents(".eThumb").find(".putCanv").val());
+           console.log(snum);
+           viewer.world.getItemAt(snum).setOpacity(opa);
+           $(this).siblings(".opot").text(opa);   
+         }
+   });
+   $(".sliderr").slider({
+         min:0,
+         max:360000,
+         value:180000,
+         slide: function( event, ui ) {
+           var snum = parseInt($(this).parents(".eThumb").find(".putCanv").val());
+           var rid = (ui.value - 180000) / 1000;
+console.log(rid);
+           $(this).siblings(".rot").text(rid);
+           viewer.world.getItemAt(snum).setRotation(rid);
+         }
+   });
+   $(".sliderw").slider({
+         min:0,
+         max:30000,
+         value:15000,
+         slide: function( event, ui ) {
+           var snum = parseInt($(this).parents(".eThumb").find(".putCanv").val());
+           var wid = (ui.value - 15000) / 10000 + 1;
+           viewer.world.getItemAt(snum).setWidth(wid);
+           $(this).siblings(".wot").text(wid);
+         }
+   });
+}
+
+function resizeViewer(){
+  var winHeight = $(window).height();   
+  var thumbListHeight = winHeight - 100;
+  var winWidth = $(window).width();   
+  var pNavHeight = winHeight - 100;
+  $("#thumbList").css({'height': thumbListHeight});
+  $("#pNavBarBody").css({'height':pNavHeight});
+  var viewerWidth = winWidth - 400;
+  var viewerHeight = winHeight - 300;
+  $("#myViewer").css({'height':viewerHeight});
+  $("#myViewer").css({'width':viewerWidth});
+}		   
+function execCopy(string){
+  var tmp = document.createElement("div");
+  var pre = document.createElement('pre');
+  pre.style.webkitUserSelect = 'auto';
+  pre.style.userSelect = 'auto';
+  tmp.appendChild(pre).textContent = string;
+  var s = tmp.style;
+  s.position = 'fixed';
+  s.right = '200%';
+  document.body.appendChild(tmp);
+  document.getSelection().selectAllChildren(tmp);
+  var result = document.execCommand("copy");
+  document.body.removeChild(tmp);
+  return result;
+}
+		   
+    </script>
+  </body>
+</html>
