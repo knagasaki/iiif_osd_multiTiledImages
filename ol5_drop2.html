@@ -63,6 +63,16 @@
    $.ajax({url:maniUrl, dataType:'json'}).done(function(maniJson){
      pickupCanvas(viewer, maniJson, 0);
    });
+/*
+   if(getParam('manifest2') != undefined){
+    $("#linkManiURI").val(getParam('manifest2'));
+    var maniUrl2 = getParam('manifest2'); 
+    loadManifest(maniUrl2);
+    $.ajax({url:maniUrl2, dataType:'json'}).done(function(maniJson2){
+     pickupCanvas(viewer, maniJson2, 0);
+    });
+   }   
+*/
   }
   resizeViewer();
   $(window).resize(function(){
@@ -77,13 +87,15 @@
     $(".putCanv").each(function(){
       if($(this).prop('checked') == true){
         compImgB = $(this).parents(".eThumb").find("img").attr("src");
-        compImgB = compImgB.replace(/full.+\.jpg$/, '')+'/full/1024,/0/default.jpg';
+        compImgB = compImgB.replace(/\/full.+\.jpg$/, '')+'/full/1024,/0/default.jpg';
       }
     });   
     var cmpUrl = 'https://www.dhii.jp/nagasaki/compUrl.txt';
+    var cmpUrl = 'https://lab.ndl.go.jp/scale-fit/?';
     console.log(compImgA);
     console.log(compImgB);
-    var qString = 'image1='+encodeURIComponent(compImgA)+'&image2='+encodeURIComponent(compImgB);
+//    cmpUrl += 'image1='+encodeURIComponent(compImgA)+'&image2='+encodeURIComponent(compImgB);
+    cmpUrl += 'image1='+compImgA+'&&image2='+compImgB;
 //    var cmpUrl = 'url?'+qString;
 ///外部サーバに投げることを想定しています。
     $.ajax({
@@ -91,8 +103,9 @@
        dataType:'json'}).done(function(rJson){
         var ow0 = viewer.world.getItemAt(0).getContentSize().x; 
         var ow1 = viewer.world.getItemAt(1).getContentSize().x; 
-
          var ratio = rJson["ratio"];
+         console.log('org0:'+ow0+'-org1:'+ow1);
+         console.log(ratio);
          viewer.world.getItemAt(1).setWidth(ratio);
     }); 
   });
