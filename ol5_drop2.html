@@ -60,6 +60,7 @@
    resizeViewer(); 
   });
   $("#adjSize").click(function(){
+//ここで青池さん謹製のスケール検出プログラムに画像を投げます。
     var currentPage = viewer.currentPage();
     var currentiJsonUri = viewer.tileSources[currentPage].replace(/\/info.json$/,'');
     var compImgA = currentiJsonUri+'/full/1024,/0/default.jpg';
@@ -73,9 +74,13 @@
     var cmpUrl = 'https://www.dhii.jp/nagasaki/compUrl.txt';
     console.log(compImgA);
     console.log(compImgB);
+///外部サーバに投げることを想定しています。
     $.ajax({
        url:cmpUrl,
        dataType:'json'}).done(function(rJson){
+        var ow0 = viewer.world.getItemAt(0).getContentSize().x; 
+        var ow1 = viewer.world.getItemAt(1).getContentSize().x; 
+
          var ratio = rJson["ratio"];
          viewer.world.getItemAt(1).setWidth(ratio);
     }); 
