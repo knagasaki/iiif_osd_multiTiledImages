@@ -228,6 +228,29 @@
   var arAllXywh = {};
   var allJson = {};
 // $("#maniLoad, #readJson").click(function(){
+$("body").on("change", ".reOpMani", function(){
+ if($(this).prop('checked') == true){
+  var reMani = $(this).val(); 
+  loadManifest(reMani);
+ }
+  $(".reOpMani").each(function(){
+    var eReMani = $(this).val();
+    console.log(eReMani+':'+reMani);
+    if(eReMani == reMani){
+       $(this).prop('checked',true);
+       $(this).closest("label").addClass('ui-checkboxradio-checked ui-state-active');
+       $(this).siblings(".ui-checkboxradio-icon").addClass('ui-icon-check ui-state-checked');    
+       $(this).siblings(".ui-checkboxradio-icon").removeClass('ui-icon-blank');
+    }
+    else{
+       $(this).prop('checked',false);
+       $(this).closest("label").removeClass('ui-checkboxradio-checked ui-state-active');
+       $(this).siblings(".ui-checkboxradio-icon").removeClass('ui-icon-check ui-state-checked');    
+       $(this).siblings(".ui-checkboxradio-icon").addClass('ui-icon-blank');
+    }
+  });
+
+});
 $("#maniLoad, #readJson").click(function(){
   var mid = $(this).attr('id');
   loadManifest(mid); 
@@ -544,6 +567,7 @@ function pickupCanvas(viewer, maniCont2, sw){
        thumb += '<input type="hidden" class="eAttr" value="'+eTAttr+'">';
 //       thumb += '<input type="hidden" class="eLicense" value="'+$("#linkLicense").text()+'">';
 //       thumb += '<input type="hidden" class="eLicense" value="'+$("#linkLicense").text()+'">';
+       thumb += '<div class="toggles"><label><input type="checkbox" class="reOpMani" value="'+maniCont2["@id"]+'"> 全体表示</label>';
   if(sw > 0){
      thumb += '<div class="toggles"><label><input type="checkbox" class="putCanv" value="'+sw+'" checked> 画像重ね</label>';
   }
