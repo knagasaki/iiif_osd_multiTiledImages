@@ -54,7 +54,16 @@
 <button id="setPositions" class="ui-button ui-widget ui-corner-all">Set Positions</button></div>
 <div><textarea id="outputJson" style="width:1000px;height:500px"></textarea></div>
 <script>
+
  $(function(){
+  if(location.search != ''){
+   $("#linkManiURI").val(getParam('manifest'));
+   var maniUrl = getParam('manifest'); 
+   loadManifest(maniUrl);
+   $.ajax({url:maniUrl, dataType:'json'}).done(function(maniJson){
+     pickupCanvas(viewer, maniJson, 0);
+   });
+  }
   resizeViewer();
   $(window).resize(function(){
    resizeViewer(); 
@@ -74,6 +83,8 @@
     var cmpUrl = 'https://www.dhii.jp/nagasaki/compUrl.txt';
     console.log(compImgA);
     console.log(compImgB);
+    var qString = 'image1='+encodeURIComponent(compImgA)+'&image2='+encodeURIComponent(compImgB);
+//    var cmpUrl = 'url?'+qString;
 ///外部サーバに投げることを想定しています。
     $.ajax({
        url:cmpUrl,
@@ -651,7 +662,16 @@ function execCopy(string){
   document.body.removeChild(tmp);
   return result;
 }
-		   
+
+function getParam(name, url) {
+    if (!url) url = window.location.href;
+    name = name.replace(/[\[\]]/g, "\\$&");
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+        results = regex.exec(url);
+    if (!results) return null;
+    if (!results[2]) return '';
+    return decodeURIComponent(results[2].replace(/\+/g, " "));
+}		   
     </script>
   </body>
 </html>
