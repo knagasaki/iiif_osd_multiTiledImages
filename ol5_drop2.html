@@ -278,8 +278,10 @@ function loadManifest(mid){
               newMani = JSON.parse(JSON.stringify(maniJson)); 
 	      $("#linkAttr").text('').text(maniJson["attribution"]);
               var licUrl = maniJson["license"];
-              if(licUrl.match(/^http/)){
+              if(licUrl != undefined){ 
+               if(licUrl.match(/^http/)){
                  licUrl = '<a href="'+licUrl+'" target="_blank">'+licUrl+'</a>';  
+               }
               }
 	      $("#linkLicense").text('').html(licUrl);
 	      $("#linkLabel").text('').text(maniJson["label"]); 
